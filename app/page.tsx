@@ -34,6 +34,8 @@ export default function Home() {
         isRemoteAction.current = true;
         videoRef.current.currentTime = data.time;
         videoRef.current.play().catch(() => {});
+        // Bayrağı işlem tamamlandıktan sonra indiriyoruz
+        setTimeout(() => { isRemoteAction.current = false; }, 300);
       }
     });
 
@@ -42,6 +44,7 @@ export default function Home() {
         isRemoteAction.current = true;
         videoRef.current.currentTime = data.time;
         videoRef.current.pause();
+        setTimeout(() => { isRemoteAction.current = false; }, 300);
       }
     });
 
@@ -49,6 +52,7 @@ export default function Home() {
       if (videoRef.current) {
         isRemoteAction.current = true;
         videoRef.current.currentTime = data.time;
+        setTimeout(() => { isRemoteAction.current = false; }, 300);
       }
     });
 
@@ -92,30 +96,21 @@ export default function Home() {
   };
 
   const handlePlay = () => {
-    if (isRemoteAction.current) {
-      isRemoteAction.current = false;
-      return;
-    }
+    if (isRemoteAction.current) return;
     if (videoRef.current) {
       sendSignal("play", { time: videoRef.current.currentTime });
     }
   };
 
   const handlePause = () => {
-    if (isRemoteAction.current) {
-      isRemoteAction.current = false;
-      return;
-    }
+    if (isRemoteAction.current) return;
     if (videoRef.current) {
       sendSignal("pause", { time: videoRef.current.currentTime });
     }
   };
 
   const handleSeeked = () => {
-    if (isRemoteAction.current) {
-      isRemoteAction.current = false;
-      return;
-    }
+    if (isRemoteAction.current) return;
     if (videoRef.current) {
       sendSignal("seek", { time: videoRef.current.currentTime });
     }
@@ -156,7 +151,7 @@ export default function Home() {
           />
         </div>
 
-        {/* Mısır Butonu - Sade & Şık */}
+        {/* Mısır Butonu */}
         <button
           onClick={handlePopcornClick}
           className="flex items-center gap-2 px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-200 font-medium rounded-full text-xs tracking-wide transition-all duration-200 active:scale-95 cursor-pointer"
