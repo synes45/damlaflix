@@ -29,30 +29,42 @@ export default function Home() {
       setConnected(true);
     });
 
+    // Oynat komutu geldiğinde
     channel.bind("play", (data: { time: number }) => {
       if (videoRef.current) {
         isRemoteAction.current = true;
-        videoRef.current.currentTime = data.time;
-        videoRef.current.play().catch(() => {});
-        // Bayrağı işlem tamamlandıktan sonra indiriyoruz
-        setTimeout(() => { isRemoteAction.current = false; }, 300);
+        
+        // Zaman farkı çok azsa süreyi hiç ellemeyip direkt oynatıyoruz (Döngüyü kırıyor)
+        if (Math.abs(videoRef.current.currentTime - data.time) > 0.5) {
+          videoRef.current.currentTime = data.time;
+        }
+
+        videoRef.current.play().then(() => {
+          setTimeout(() => { isRemoteAction.current = false; }, 200);
+        }).catch(() => {
+          isRemoteAction.current = false;
+        });
       }
     });
 
+    // Durdur komutu geldiğinde
     channel.bind("pause", (data: { time: number }) => {
       if (videoRef.current) {
         isRemoteAction.current = true;
         videoRef.current.currentTime = data.time;
         videoRef.current.pause();
-        setTimeout(() => { isRemoteAction.current = false; }, 300);
+
+        setTimeout(() => { isRemoteAction.current = false; }, 200);
       }
     });
 
+    // İleri/Geri Sarma geldiğinde
     channel.bind("seek", (data: { time: number }) => {
       if (videoRef.current) {
         isRemoteAction.current = true;
         videoRef.current.currentTime = data.time;
-        setTimeout(() => { isRemoteAction.current = false; }, 300);
+
+        setTimeout(() => { isRemoteAction.current = false; }, 200);
       }
     });
 
