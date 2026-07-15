@@ -1,8 +1,8 @@
-// app/page.tsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
 import Pusher from "pusher-js";
+import confetti from "canvas-confetti";
 
 export default function Home() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -14,8 +14,13 @@ export default function Home() {
   const CHANNEL_NAME = "damlaflix-room";
 
   useEffect(() => {
-    const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
-      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
+    const pusherKey = process.env.NEXT_PUBLIC_PUSHER_KEY;
+    const pusherCluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
+
+    if (!pusherKey || !pusherCluster) return;
+
+    const pusher = new Pusher(pusherKey, {
+      cluster: pusherCluster,
     });
 
     const channel = pusher.subscribe(CHANNEL_NAME);
@@ -24,7 +29,6 @@ export default function Home() {
       setConnected(true);
     });
 
-    // Karşı taraftan gelen 'play' komutu
     channel.bind("play", (data: { time: number }) => {
       if (videoRef.current) {
         isRemoteAction.current = true;
@@ -33,7 +37,6 @@ export default function Home() {
       }
     });
 
-    // Karşı taraftan gelen 'pause' komutu
     channel.bind("pause", (data: { time: number }) => {
       if (videoRef.current) {
         isRemoteAction.current = true;
@@ -42,7 +45,6 @@ export default function Home() {
       }
     });
 
-    // Karşı taraftan gelen 'seek' komutu
     channel.bind("seek", (data: { time: number }) => {
       if (videoRef.current) {
         isRemoteAction.current = true;
@@ -50,10 +52,23 @@ export default function Home() {
       }
     });
 
+    channel.bind("popcorn", () => {
+      triggerConfetti();
+    });
+
     return () => {
       pusher.unsubscribe(CHANNEL_NAME);
     };
   }, []);
+
+  const triggerConfetti = () => {
+    confetti({
+      particleCount: 80,
+      spread: 60,
+      origin: { y: 0.85 },
+      colors: ["#f1c40f", "#e67e22", "#e74c3c", "#ffffff"],
+    });
+  };
 
   const sendSignal = async (event: string, data: any) => {
     try {
@@ -69,6 +84,11 @@ export default function Home() {
     } catch (error) {
       console.error("Sinyal gönderilemedi:", error);
     }
+  };
+
+  const handlePopcornClick = () => {
+    triggerConfetti();
+    sendSignal("popcorn", {});
   };
 
   const handlePlay = () => {
@@ -102,9 +122,9 @@ export default function Home() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between bg-black text-zinc-100 p-4 sm:p-8 font-sans select-none">
+    <main className="relative flex min-h-screen flex-col items-center justify-between bg-zinc-950 text-zinc-100 p-4 sm:p-8 font-sans select-none overflow-hidden">
       {/* Üst Bar */}
-      <header className="w-full max-w-5xl flex items-center justify-between py-4 border-b border-zinc-900">
+      <header className="relative z-10 w-full max-w-5xl flex items-center justify-between py-4 border-b border-zinc-900">
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-bold tracking-tight text-white">
             DAMLAFLIX
@@ -112,7 +132,7 @@ export default function Home() {
           <span className="text-rose-500 text-sm">❤️</span>
         </div>
 
-        <div className="flex items-center gap-2 text-xs font-medium text-zinc-400">
+        <div className="flex items-center gap-2 text-xs font-medium text-zinc-400 bg-zinc-900/60 px-3 py-1 rounded-full border border-zinc-800">
           <span
             className={`w-2 h-2 rounded-full ${
               connected ? "bg-emerald-500" : "bg-amber-500"
@@ -122,9 +142,9 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Video Oynatıcı */}
-      <div className="w-full max-w-5xl my-auto py-6 flex flex-col items-center">
-        <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-zinc-900 bg-zinc-950 shadow-2xl">
+      {/* Video Oynatıcı & Mısır Butonu */}
+      <div className="relative z-10 w-full max-w-5xl my-auto py-6 flex flex-col items-center gap-5">
+        <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-zinc-800/80 bg-black shadow-2xl">
           <video
             ref={videoRef}
             src={VIDEO_URL}
@@ -135,11 +155,20 @@ export default function Home() {
             onSeeked={handleSeeked}
           />
         </div>
+
+        {/* Mısır Butonu - Sade & Şık */}
+        <button
+          onClick={handlePopcornClick}
+          className="flex items-center gap-2 px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-200 font-medium rounded-full text-xs tracking-wide transition-all duration-200 active:scale-95 cursor-pointer"
+        >
+          <span className="text-base">🍿</span>
+          <span>Mısır Patlat</span>
+        </button>
       </div>
 
       {/* Alt Bilgi */}
-      <footer className="w-full max-w-5xl text-center py-4 text-xs text-zinc-600 border-t border-zinc-900">
-        Watch Party
+      <footer className="relative z-10 w-full max-w-5xl text-center py-4 text-xs text-zinc-600 border-t border-zinc-900">
+        damla eşşşeğiyle kaçak film izleyebilmek için | efe ❤️ damla
       </footer>
     </main>
   );
