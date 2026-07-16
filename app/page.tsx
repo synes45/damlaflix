@@ -314,15 +314,6 @@ export default function Home() {
               </span>
             )}
           </button>
-
-          <div className="flex items-center gap-2 text-xs font-medium text-zinc-400 bg-zinc-900/60 px-3 py-1.5 rounded-full border border-zinc-800">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                connected ? "bg-emerald-500" : "bg-amber-500"
-              }`}
-            />
-            <span>{connected ? "Senkronize" : "Bağlanıyor..."}</span>
-          </div>
         </div>
       </header>
 
