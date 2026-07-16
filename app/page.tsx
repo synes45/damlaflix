@@ -18,6 +18,8 @@ interface WatchlistItem {
   thumbnail?: string | null;
 }
 
+const LOCAL_STORAGE_KEY = "damlaflix_watchlist";
+
 export default function Home() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const ytPlayerRef = useRef<any>(null);
@@ -44,6 +46,28 @@ export default function Home() {
   };
 
   const ytVideoId = getYouTubeId(videoUrl);
+
+  // 1. Sayfa ilk yüklendiğinde hafızadaki (localStorage) listeyi yükle
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (saved) {
+        setWatchlist(JSON.parse(saved));
+      }
+    } catch (error) {
+      console.error("Watchlist okunamadı:", error);
+    }
+  }, []);
+
+  // Helper: Watchlist'i hem state'e hem localStorage'a kaydetme
+  const saveAndSetWatchlist = (newList: WatchlistItem[]) => {
+    setWatchlist(newList);
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newList));
+    } catch (error) {
+      console.error("Watchlist kaydedilemedi:", error);
+    }
+  };
 
   useEffect(() => {
     setIsYouTube(!!ytVideoId);
@@ -156,8 +180,9 @@ export default function Home() {
       triggerConfetti();
     });
 
+    // Karşı taraftan güncelleme geldiğinde hem state'i hem de hafızayı güncelle
     channel.bind("update-watchlist", (data: { list: WatchlistItem[] }) => {
-      setWatchlist(data.list);
+      saveAndSetWatchlist(data.list);
     });
 
     return () => {
@@ -203,7 +228,6 @@ export default function Home() {
     setInputUrl("");
   };
 
-  // Video Detaylarını (Başlık & Thumbnail) Otomatik Çeken Fonksiyon
   const fetchVideoMetaData = async (url: string) => {
     const ytId = getYouTubeId(url);
 
@@ -220,7 +244,6 @@ export default function Home() {
         return { title: "YouTube Videosu", thumbnail };
       }
     } else {
-      // YouTube değilse URL'den dosya adını çekip temizler
       const cleanName = decodeURIComponent(url.split("/").pop() || "Video")
         .replace(/\.[^/.]+$/, "")
         .replace(/[-_]/g, " ");
@@ -232,7 +255,6 @@ export default function Home() {
     }
   };
 
-  // Watchlist'e Sadece Linkle Ekleme
   const handleAddWatchlist = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUrl.trim()) return;
@@ -248,7 +270,7 @@ export default function Home() {
     };
 
     const updatedList = [...watchlist, newItem];
-    setWatchlist(updatedList);
+    saveAndSetWatchlist(updatedList);
     sendSignal("update-watchlist", { list: updatedList });
 
     setNewUrl("");
@@ -257,7 +279,7 @@ export default function Home() {
 
   const handleRemoveWatchlist = (id: string) => {
     const updatedList = watchlist.filter((item) => item.id !== id);
-    setWatchlist(updatedList);
+    saveAndSetWatchlist(updatedList);
     sendSignal("update-watchlist", { list: updatedList });
   };
 
@@ -339,7 +361,7 @@ export default function Home() {
           {!videoUrl ? (
             <div className="flex flex-col items-center gap-2 text-zinc-600">
               <span className="text-3xl">🎬</span>
-              <p className="text-xs font-medium">video seç aşkm</p>
+              <p className="text-xs font-medium">aşkm video seç</p>
             </div>
           ) : isYouTube ? (
             <div id="yt-player" className="w-full h-full" />
@@ -414,7 +436,6 @@ export default function Home() {
                     className="flex items-center justify-between bg-zinc-950 border border-zinc-800/80 p-2 rounded-xl hover:border-zinc-700 transition-colors gap-3"
                   >
                     <div className="flex items-center gap-3 overflow-hidden">
-                      {/* Thumbnail (Varsa YouTube Kapak Resmi, Yoksa Film İkonu) */}
                       {item.thumbnail ? (
                         <img
                           src={item.thumbnail}
