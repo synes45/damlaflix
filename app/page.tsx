@@ -11,6 +11,13 @@ declare global {
   }
 }
 
+interface WatchlistItem {
+  id: string;
+  title: string;
+  url: string;
+  thumbnail?: string | null;
+}
+
 export default function Home() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const ytPlayerRef = useRef<any>(null);
@@ -20,6 +27,12 @@ export default function Home() {
   const [videoUrl, setVideoUrl] = useState("");
   const [inputUrl, setInputUrl] = useState("");
   const [isYouTube, setIsYouTube] = useState(false);
+
+  // Watchlist State'leri
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [newUrl, setNewUrl] = useState("");
+  const [isWatchlistOpen, setIsWatchlistOpen] = useState(false);
+  const [isLoadingMetadata, setIsLoadingMetadata] = useState(false);
 
   const CHANNEL_NAME = "damlaflix-room";
 
@@ -143,6 +156,10 @@ export default function Home() {
       triggerConfetti();
     });
 
+    channel.bind("update-watchlist", (data: { list: WatchlistItem[] }) => {
+      setWatchlist(data.list);
+    });
+
     return () => {
       pusher.unsubscribe(CHANNEL_NAME);
     };
@@ -186,6 +203,69 @@ export default function Home() {
     setInputUrl("");
   };
 
+  // Video Detaylarını (Başlık & Thumbnail) Otomatik Çeken Fonksiyon
+  const fetchVideoMetaData = async (url: string) => {
+    const ytId = getYouTubeId(url);
+
+    if (ytId) {
+      const thumbnail = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
+      try {
+        const res = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${ytId}`);
+        const data = await res.json();
+        return {
+          title: data.title || "YouTube Videosu",
+          thumbnail,
+        };
+      } catch {
+        return { title: "YouTube Videosu", thumbnail };
+      }
+    } else {
+      // YouTube değilse URL'den dosya adını çekip temizler
+      const cleanName = decodeURIComponent(url.split("/").pop() || "Video")
+        .replace(/\.[^/.]+$/, "")
+        .replace(/[-_]/g, " ");
+
+      return {
+        title: cleanName || "Video",
+        thumbnail: null,
+      };
+    }
+  };
+
+  // Watchlist'e Sadece Linkle Ekleme
+  const handleAddWatchlist = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUrl.trim()) return;
+
+    setIsLoadingMetadata(true);
+    const meta = await fetchVideoMetaData(newUrl.trim());
+
+    const newItem: WatchlistItem = {
+      id: Date.now().toString(),
+      title: meta.title,
+      url: newUrl.trim(),
+      thumbnail: meta.thumbnail,
+    };
+
+    const updatedList = [...watchlist, newItem];
+    setWatchlist(updatedList);
+    sendSignal("update-watchlist", { list: updatedList });
+
+    setNewUrl("");
+    setIsLoadingMetadata(false);
+  };
+
+  const handleRemoveWatchlist = (id: string) => {
+    const updatedList = watchlist.filter((item) => item.id !== id);
+    setWatchlist(updatedList);
+    sendSignal("update-watchlist", { list: updatedList });
+  };
+
+  const handlePlayFromWatchlist = (url: string) => {
+    setVideoUrl(url);
+    sendSignal("change-video", { url });
+  };
+
   const handlePlay = () => {
     if (isRemoteAction.current) return;
     if (videoRef.current) {
@@ -221,13 +301,28 @@ export default function Home() {
           <span className="text-rose-500 text-sm">❤️</span>
         </div>
 
-        <div className="flex items-center gap-2 text-xs font-medium text-zinc-400 bg-zinc-900/60 px-3 py-1 rounded-full border border-zinc-800">
-          <span
-            className={`w-2 h-2 rounded-full ${
-              connected ? "bg-emerald-500" : "bg-amber-500"
-            }`}
-          />
-          <span>{connected ? "Senkronize" : "Bağlanıyor..."}</span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsWatchlistOpen(!isWatchlistOpen)}
+            className="flex items-center gap-1.5 text-xs font-medium text-zinc-300 bg-zinc-900 hover:bg-zinc-800 px-3 py-1.5 rounded-full border border-zinc-800 transition-colors cursor-pointer"
+          >
+            <span>📜</span>
+            <span>İzlenecekler</span>
+            {watchlist.length > 0 && (
+              <span className="bg-rose-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                {watchlist.length}
+              </span>
+            )}
+          </button>
+
+          <div className="flex items-center gap-2 text-xs font-medium text-zinc-400 bg-zinc-900/60 px-3 py-1.5 rounded-full border border-zinc-800">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                connected ? "bg-emerald-500" : "bg-amber-500"
+              }`}
+            />
+            <span>{connected ? "Senkronize" : "Bağlanıyor..."}</span>
+          </div>
         </div>
       </header>
 
@@ -253,7 +348,7 @@ export default function Home() {
           {!videoUrl ? (
             <div className="flex flex-col items-center gap-2 text-zinc-600">
               <span className="text-3xl">🎬</span>
-              <p className="text-xs font-medium">video seç askm</p>
+              <p className="text-xs font-medium">Birlikte izlemek için üst tarafa bir video linki yapıştırın</p>
             </div>
           ) : isYouTube ? (
             <div id="yt-player" className="w-full h-full" />
@@ -280,6 +375,101 @@ export default function Home() {
           <span>Mısır Patlat</span>
         </button>
       </div>
+
+      {/* İzlenecekler Modal / Panel */}
+      {isWatchlistOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 w-full max-w-lg rounded-2xl p-5 shadow-2xl flex flex-col gap-4">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <span>📜</span> Daha Sonra İzlenecekler Listesi
+              </h3>
+              <button
+                onClick={() => setIsWatchlistOpen(false)}
+                className="text-zinc-400 hover:text-white text-xs px-2 py-1 rounded-lg bg-zinc-800 transition-colors"
+              >
+                ✕ Kapat
+              </button>
+            </div>
+
+            {/* Sadece Link Alan Form */}
+            <form onSubmit={handleAddWatchlist} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="YouTube linki veya Video URL yapıştır..."
+                value={newUrl}
+                onChange={(e) => setNewUrl(e.target.value)}
+                className="flex-1 bg-zinc-950 border border-zinc-800 text-xs px-3 py-2.5 rounded-xl focus:outline-none focus:border-rose-900 text-zinc-200 placeholder-zinc-600"
+              />
+              <button
+                type="submit"
+                disabled={isLoadingMetadata}
+                className="bg-rose-900 hover:bg-rose-850 disabled:bg-zinc-800 text-white text-xs font-medium px-4 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                {isLoadingMetadata ? "Ekleniyor..." : "Ekle"}
+              </button>
+            </form>
+
+            {/* Video Listesi */}
+            <div className="max-h-72 overflow-y-auto flex flex-col gap-2.5 pr-1 custom-scrollbar">
+              {watchlist.length === 0 ? (
+                <p className="text-xs text-zinc-600 text-center py-8">
+                  Henüz listeye film eklenmedi.
+                </p>
+              ) : (
+                watchlist.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between bg-zinc-950 border border-zinc-800/80 p-2 rounded-xl hover:border-zinc-700 transition-colors gap-3"
+                  >
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      {/* Thumbnail (Varsa YouTube Kapak Resmi, Yoksa Film İkonu) */}
+                      {item.thumbnail ? (
+                        <img
+                          src={item.thumbnail}
+                          alt={item.title}
+                          className="w-16 h-10 object-cover rounded-lg border border-zinc-800 flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-16 h-10 bg-zinc-900 border border-zinc-800 rounded-lg flex items-center justify-center text-zinc-600 text-lg flex-shrink-0">
+                          🎬
+                        </div>
+                      )}
+
+                      <div className="flex flex-col gap-0.5 overflow-hidden">
+                        <span className="text-xs font-semibold text-zinc-200 truncate">
+                          {item.title}
+                        </span>
+                        <span className="text-[10px] text-zinc-500 truncate">
+                          {item.url}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        onClick={() => {
+                          handlePlayFromWatchlist(item.url);
+                          setIsWatchlistOpen(false);
+                        }}
+                        className="bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-900 text-[11px] px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                      >
+                        Oynat ▶
+                      </button>
+                      <button
+                        onClick={() => handleRemoveWatchlist(item.id)}
+                        className="bg-zinc-900 hover:bg-rose-950/60 text-zinc-500 hover:text-rose-400 text-xs p-1.5 rounded-lg transition-colors cursor-pointer"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Alt Bilgi */}
       <footer className="relative z-10 w-full max-w-5xl text-center py-4 text-xs text-zinc-600 border-t border-zinc-900">
