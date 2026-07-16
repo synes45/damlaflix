@@ -32,6 +32,7 @@ export default function Home() {
 
   // Watchlist State'leri
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const watchlistRef = useRef<WatchlistItem[]>([]);
   const [newUrl, setNewUrl] = useState("");
   const [isWatchlistOpen, setIsWatchlistOpen] = useState(false);
   const [isLoadingMetadata, setIsLoadingMetadata] = useState(false);
@@ -47,27 +48,30 @@ export default function Home() {
 
   const ytVideoId = getYouTubeId(videoUrl);
 
-  // 1. Sayfa ilk yüklendiğinde hafızadaki (localStorage) listeyi yükle
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (saved) {
-        setWatchlist(JSON.parse(saved));
-      }
-    } catch (error) {
-      console.error("Watchlist okunamadı:", error);
-    }
-  }, []);
-
-  // Helper: Watchlist'i hem state'e hem localStorage'a kaydetme
+  // State ve Ref'i senkronize tutan yardımcı fonksiyon
   const saveAndSetWatchlist = (newList: WatchlistItem[]) => {
     setWatchlist(newList);
+    watchlistRef.current = newList;
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newList));
     } catch (error) {
       console.error("Watchlist kaydedilemedi:", error);
     }
   };
+
+  // 1. İlk yüklemede local'deki veriyi oku
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setWatchlist(parsed);
+        watchlistRef.current = parsed;
+      }
+    } catch (error) {
+      console.error("Watchlist okunamadı:", error);
+    }
+  }, []);
 
   useEffect(() => {
     setIsYouTube(!!ytVideoId);
@@ -136,6 +140,8 @@ export default function Home() {
 
     pusher.connection.bind("connected", () => {
       setConnected(true);
+      // Bağlantı kurulduğunda diğer tarayıcıya "bendeki listeyi güncelle / gönder" isteği fırlat
+      sendSignal("request-watchlist", {});
     });
 
     channel.bind("play", (data: { time: number }) => {
@@ -180,9 +186,16 @@ export default function Home() {
       triggerConfetti();
     });
 
-    // Karşı taraftan güncelleme geldiğinde hem state'i hem de hafızayı güncelle
+    // Biri listeyi güncellediğinde gelen listeyi kaydet
     channel.bind("update-watchlist", (data: { list: WatchlistItem[] }) => {
       saveAndSetWatchlist(data.list);
+    });
+
+    // Diğer kullanıcı bağlandığında mevcut listeyi ona gönder
+    channel.bind("request-watchlist", () => {
+      if (watchlistRef.current.length > 0) {
+        sendSignal("update-watchlist", { list: watchlistRef.current });
+      }
     });
 
     return () => {
@@ -269,7 +282,7 @@ export default function Home() {
       thumbnail: meta.thumbnail,
     };
 
-    const updatedList = [...watchlist, newItem];
+    const updatedList = [...watchlistRef.current, newItem];
     saveAndSetWatchlist(updatedList);
     sendSignal("update-watchlist", { list: updatedList });
 
@@ -278,7 +291,7 @@ export default function Home() {
   };
 
   const handleRemoveWatchlist = (id: string) => {
-    const updatedList = watchlist.filter((item) => item.id !== id);
+    const updatedList = watchlistRef.current.filter((item) => item.id !== id);
     saveAndSetWatchlist(updatedList);
     sendSignal("update-watchlist", { list: updatedList });
   };
@@ -336,6 +349,15 @@ export default function Home() {
               </span>
             )}
           </button>
+
+          <div className="flex items-center gap-2 text-xs font-medium text-zinc-400 bg-zinc-900/60 px-3 py-1.5 rounded-full border border-zinc-800">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                connected ? "bg-emerald-500" : "bg-amber-500"
+              }`}
+            />
+            <span>{connected ? "Senkronize" : "Bağlanıyor..."}</span>
+          </div>
         </div>
       </header>
 
