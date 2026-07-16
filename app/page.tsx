@@ -348,7 +348,7 @@ export default function Home() {
           {!videoUrl ? (
             <div className="flex flex-col items-center gap-2 text-zinc-600">
               <span className="text-3xl">🎬</span>
-              <p className="text-xs font-medium">Birlikte izlemek için üst tarafa bir video linki yapıştırın</p>
+              <p className="text-xs font-medium">video seç aşkm</p>
             </div>
           ) : isYouTube ? (
             <div id="yt-player" className="w-full h-full" />
