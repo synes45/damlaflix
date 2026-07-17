@@ -23,7 +23,10 @@ const LOCAL_STORAGE_KEY = "damlaflix_watchlist";
 export default function Home() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const ytPlayerRef = useRef<any>(null);
+
+  // Sinyal çakışması ve Network Canceled hatalarını önleyen sıkı kilitler
   const isRemoteAction = useRef(false);
+  const lockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [connected, setConnected] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
@@ -39,6 +42,15 @@ export default function Home() {
 
   const CHANNEL_NAME = "damlaflix-room";
 
+  // Uzaktan gelen aksiyonlar esnasında yerel event'leri durduran kilit fonksiyonu
+  const activateRemoteLock = (duration = 1500) => {
+    isRemoteAction.current = true;
+    if (lockTimeoutRef.current) clearTimeout(lockTimeoutRef.current);
+    lockTimeoutRef.current = setTimeout(() => {
+      isRemoteAction.current = false;
+    }, duration);
+  };
+
   const getYouTubeId = (url: string) => {
     if (!url) return null;
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -48,7 +60,6 @@ export default function Home() {
 
   const ytVideoId = getYouTubeId(videoUrl);
 
-  // State ve Ref'i senkronize tutan yardımcı fonksiyon
   const saveAndSetWatchlist = (newList: WatchlistItem[]) => {
     setWatchlist(newList);
     watchlistRef.current = newList;
@@ -59,7 +70,6 @@ export default function Home() {
     }
   };
 
-  // 1. İlk yüklemede local'deki veriyi oku
   useEffect(() => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -140,42 +150,52 @@ export default function Home() {
 
     pusher.connection.bind("connected", () => {
       setConnected(true);
-      // Bağlantı kurulduğunda diğer tarayıcıya "bendeki listeyi güncelle / gönder" isteği fırlat
       sendSignal("request-watchlist", {});
     });
 
+    // 1. PLAY SİNYALİ
     channel.bind("play", (data: { time: number }) => {
-      isRemoteAction.current = true;
+      activateRemoteLock(1500);
+
       if (isYouTube && ytPlayerRef.current) {
-        ytPlayerRef.current.seekTo(data.time, true);
+        const currTime = ytPlayerRef.current.getCurrentTime();
+        if (Math.abs(currTime - data.time) > 2) {
+          ytPlayerRef.current.seekTo(data.time, true);
+        }
         ytPlayerRef.current.playVideo();
       } else if (videoRef.current) {
-        videoRef.current.currentTime = data.time;
+        const currTime = videoRef.current.currentTime;
+        
+        // KRİTİK NOKTA: Fark 3 saniyeden azsa kesinlikle currentTime SET ETMİYORUZ!
+        // Bu sayede tarayıcının fırlattığı Network istekleri canceled olmuyor.
+        if (Math.abs(currTime - data.time) > 3) {
+          videoRef.current.currentTime = data.time;
+        }
+        
         videoRef.current.play().catch(() => {});
       }
-      setTimeout(() => { isRemoteAction.current = false; }, 400);
     });
 
+    // 2. PAUSE SİNYALİ
     channel.bind("pause", (data: { time: number }) => {
-      isRemoteAction.current = true;
+      activateRemoteLock(1500);
+
       if (isYouTube && ytPlayerRef.current) {
-        ytPlayerRef.current.seekTo(data.time, true);
         ytPlayerRef.current.pauseVideo();
       } else if (videoRef.current) {
-        videoRef.current.currentTime = data.time;
         videoRef.current.pause();
       }
-      setTimeout(() => { isRemoteAction.current = false; }, 400);
     });
 
+    // 3. SEEK SİNYALİ (Kullanıcı barı bilerek ileri/geri sardığında)
     channel.bind("seek", (data: { time: number }) => {
-      isRemoteAction.current = true;
+      activateRemoteLock(1500);
+
       if (isYouTube && ytPlayerRef.current) {
         ytPlayerRef.current.seekTo(data.time, true);
       } else if (videoRef.current) {
         videoRef.current.currentTime = data.time;
       }
-      setTimeout(() => { isRemoteAction.current = false; }, 400);
     });
 
     channel.bind("change-video", (data: { url: string }) => {
@@ -186,12 +206,10 @@ export default function Home() {
       triggerConfetti();
     });
 
-    // Biri listeyi güncellediğinde gelen listeyi kaydet
     channel.bind("update-watchlist", (data: { list: WatchlistItem[] }) => {
       saveAndSetWatchlist(data.list);
     });
 
-    // Diğer kullanıcı bağlandığında mevcut listeyi ona gönder
     channel.bind("request-watchlist", () => {
       if (watchlistRef.current.length > 0) {
         sendSignal("update-watchlist", { list: watchlistRef.current });
@@ -301,6 +319,7 @@ export default function Home() {
     sendSignal("change-video", { url });
   };
 
+  // HTML5 Video Olay İşleyicileri
   const handlePlay = () => {
     if (isRemoteAction.current) return;
     if (videoRef.current) {
@@ -324,10 +343,8 @@ export default function Home() {
 
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-between bg-zinc-950 text-zinc-100 p-4 sm:p-8 font-sans select-none overflow-hidden">
-      {/* Arka Plan Koyu Kırmızı Glow Efekti */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-rose-950/20 rounded-full blur-[120px] pointer-events-none" />
 
-      {/* Üst Bar */}
       <header className="relative z-10 w-full max-w-5xl flex items-center justify-between py-4 border-b border-zinc-900">
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-bold tracking-tight text-white">
@@ -361,7 +378,6 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Kontroller & Video Ekranı */}
       <div className="relative z-10 w-full max-w-5xl my-auto py-6 flex flex-col items-center gap-5">
         <form onSubmit={handleUrlSubmit} className="w-full flex gap-2">
           <input
@@ -393,6 +409,7 @@ export default function Home() {
               src={videoUrl}
               controls
               playsInline
+              preload="metadata"
               crossOrigin="anonymous"
               className="w-full h-full object-contain"
               onPlay={handlePlay}
@@ -411,7 +428,6 @@ export default function Home() {
         </button>
       </div>
 
-      {/* İzlenecekler Modal / Panel */}
       {isWatchlistOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-zinc-800 w-full max-w-lg rounded-2xl p-5 shadow-2xl flex flex-col gap-4">
@@ -427,7 +443,6 @@ export default function Home() {
               </button>
             </div>
 
-            {/* Sadece Link Alan Form */}
             <form onSubmit={handleAddWatchlist} className="flex gap-2">
               <input
                 type="text"
@@ -445,7 +460,6 @@ export default function Home() {
               </button>
             </form>
 
-            {/* Video Listesi */}
             <div className="max-h-72 overflow-y-auto flex flex-col gap-2.5 pr-1 custom-scrollbar">
               {watchlist.length === 0 ? (
                 <p className="text-xs text-zinc-600 text-center py-8">
@@ -505,7 +519,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Alt Bilgi */}
       <footer className="relative z-10 w-full max-w-5xl text-center py-4 text-xs text-zinc-600 border-t border-zinc-900">
         damla eşşşeğiyle kaçak film izleyebilmek için | efe ❤️ damla
       </footer>
