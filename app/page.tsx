@@ -304,6 +304,7 @@ export default function Home() {
   const ytHostRef = useRef<HTMLDivElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
   const glowCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // Eş zamanlı izleme motoru durumu (render'dan bağımsız)
@@ -369,6 +370,8 @@ export default function Home() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [actionToast, setActionToast] = useState<{ id: number; text: string } | null>(null);
   const actionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [chatToast, setChatToast] = useState<{ id: string; from: string; text: string } | null>(null);
+  const chatToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const ytVideoId = getYouTubeId(videoUrl);
   const isYouTube = !!ytVideoId;
@@ -640,6 +643,26 @@ export default function Home() {
     actionTimerRef.current = setTimeout(() => setActionToast(null), 3500);
   };
 
+  const showChatToast = (data: { id: string; from: string; text: string }) => {
+    setChatToast(data);
+    if (chatToastTimerRef.current) clearTimeout(chatToastTimerRef.current);
+    chatToastTimerRef.current = setTimeout(() => setChatToast(null), 6500);
+  };
+
+  const handleReply = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
+    setPanelOpen(true);
+    panelOpenRef.current = true;
+    setUnread(0);
+    setChatToast(null);
+    if (chatToastTimerRef.current) clearTimeout(chatToastTimerRef.current);
+    setTimeout(() => {
+      chatInputRef.current?.focus();
+    }, 150);
+  };
+
   const addSystem = (text: string) => {
     setMessages((prev) =>
       [...prev, { id: `s${Date.now()}${Math.random()}`, from: "", text, at: Date.now(), system: true }].slice(-200)
@@ -741,6 +764,7 @@ export default function Home() {
       recordHistory,
       addSystem,
       showAction,
+      showChatToast,
       getTime,
     };
   });
@@ -965,6 +989,7 @@ export default function Home() {
         prev.some((m) => m.id === d.id) ? prev : [...prev, { id: d.id, from: d.from, text: d.text, at: d.at }].slice(-200)
       );
       if (!panelOpenRef.current) setUnread((u) => u + 1);
+      latest.current.showChatToast({ id: d.id, from: d.from, text: d.text });
     });
 
     channel.bind("popcorn", (d: { from: string }) => {
@@ -1284,17 +1309,52 @@ export default function Home() {
             </div>
           )}
 
-          {/* Karşı tarafın eylemi: kim ne yaptı */}
-          {actionToast && (
-            <div className="absolute bottom-16 left-3 z-20 pointer-events-none max-w-[80%]">
+          {/* Bildirimler: Mesaj ve Eylem bildirimleri */}
+          <div className="absolute bottom-14 left-3 z-20 flex flex-col gap-2 max-w-[85%] sm:max-w-md pointer-events-none">
+            {chatToast && (
+              <div
+                key={chatToast.id}
+                className="pointer-events-auto flex items-center gap-2.5 bg-zinc-950/95 border border-rose-900/80 text-zinc-100 text-xs p-2.5 rounded-2xl backdrop-blur-md shadow-2xl animate-pulse-once"
+              >
+                <div className="w-7 h-7 rounded-full bg-rose-600/30 border border-rose-500/50 flex items-center justify-center font-bold text-xs text-rose-300 shrink-0">
+                  {chatToast.from[0]}
+                </div>
+                <div className="flex flex-col min-w-0 pr-1 select-text">
+                  <span className="text-[10px] font-bold text-rose-400 leading-tight">
+                    {chatToast.from}
+                  </span>
+                  <span className="text-xs text-zinc-200 line-clamp-2 break-words">
+                    {chatToast.text}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                  <button
+                    onClick={handleReply}
+                    className="bg-rose-900 hover:bg-rose-800 text-white text-[11px] font-medium px-3 py-1.5 rounded-xl transition-all active:scale-95 cursor-pointer shadow flex items-center gap-1"
+                  >
+                    <span>Cevapla</span>
+                    <span>💬</span>
+                  </button>
+                  <button
+                    onClick={() => setChatToast(null)}
+                    className="text-zinc-500 hover:text-zinc-300 text-xs p-1 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer"
+                    title="Kapat"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {actionToast && (
               <div
                 key={actionToast.id}
-                className="flex items-center gap-2 bg-zinc-900/90 border border-zinc-700/80 text-zinc-100 text-xs font-medium px-4 py-2 rounded-full backdrop-blur-md shadow-lg animate-pulse-once"
+                className="self-start pointer-events-auto flex items-center gap-2 bg-zinc-900/90 border border-zinc-700/80 text-zinc-100 text-xs font-medium px-4 py-2 rounded-full backdrop-blur-md shadow-lg animate-pulse-once"
               >
                 {actionToast.text}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Uyarı kutusu: tam ekranda da görünür (tam ekran bu kabuğa uygulanır) */}
           {warning && (
@@ -1472,6 +1532,7 @@ export default function Home() {
 
         <form onSubmit={handleSendChat} className="flex gap-2 p-3 border-t border-zinc-800">
           <input
+            ref={chatInputRef}
             type="text"
             placeholder="Mesaj yaz..."
             value={chatInput}
