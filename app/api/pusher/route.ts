@@ -11,9 +11,15 @@ const pusher = new Pusher({
 
 export async function POST(req: Request) {
   try {
-    const { channel, event, data } = await req.json();
+    const { channel, event, data, socketId } = await req.json();
 
-    await pusher.trigger(channel, event, data);
+    // socketId verilirse gönderen kişiye geri yansıma (echo) olmaz.
+    await pusher.trigger(
+      channel,
+      event,
+      data,
+      socketId ? { socket_id: socketId } : undefined
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {
