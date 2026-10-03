@@ -1055,7 +1055,7 @@ export default function Home() {
     channel.bind("love-rain", (d: { from: string }) => {
       if (d.from === me) return;
       latest.current.triggerLoveRain();
-      latest.current.showAction(`❤️ ${d.from} sana kocaman bir aşk yağmuru gönderdi!`);
+      latest.current.showAction(`❤️ ${d.from} SENİ ÇÇÇOOOOOOKKKKK SEVİİYOOR`);
     });
 
     channel.bind("magic-action", (d: { type: string; from: string }) => {
@@ -1196,7 +1196,7 @@ export default function Home() {
       heartClicksRef.current = [];
       triggerLoveRain();
       sendSignal("love-rain", {});
-      showAction("💖 Aşk Yağmuru Başlatıldı! Seni Çok Seviyorum!");
+      showAction("💖 SENİ ÇÇÇOOOOOOKKKKK SEVİİYOOR! ❤️");
     } else {
       try {
         const heart = confetti.shapeFromText({ text: "❤️", scalar: 1.5 });
@@ -1975,8 +1975,8 @@ export default function Home() {
       {donkeyActive && (
         <div className="fixed bottom-12 left-0 z-[70] pointer-events-none animate-donkey-run flex items-center gap-3">
           <span className="text-5xl select-none filter drop-shadow-lg">🫏</span>
-          <span className="bg-zinc-900/95 border border-rose-900/80 text-rose-200 text-xs px-3.5 py-1.5 rounded-full shadow-2xl font-semibold backdrop-blur-md">
-            İnatçı ama dünyanın en tatlısı! 🥰
+          <span className="bg-zinc-900/95 border border-zinc-700 text-zinc-100 text-xs px-3.5 py-1.5 rounded-full shadow-2xl font-bold tracking-wider backdrop-blur-md">
+            EEŞŞŞŞŞEEKK 🫏
           </span>
         </div>
       )}
@@ -1985,8 +1985,8 @@ export default function Home() {
       <footer
         onClick={() => {
           setDonkeyActive(true);
-          showAction("🫏 İnatçı Damla Modu Devrede! İyiki varsın eşşek ❤️");
-          setTimeout(() => setDonkeyActive(false), 4500);
+          showAction("🫏 EEŞŞŞŞŞEEKK");
+          setTimeout(() => setDonkeyActive(false), 9000);
         }}
         title="Tıkla :)"
         className="relative z-10 w-full max-w-6xl text-center py-3 text-xs text-zinc-600 hover:text-zinc-400 transition-colors border-t border-zinc-900 cursor-pointer select-none"

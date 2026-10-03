@@ -53,5 +53,5 @@ html, body { height: 100%; overflow: hidden; }
   0% { transform: translateX(-180px); }
   100% { transform: translateX(calc(100vw + 180px)); }
 }
-.animate-donkey-run { animation: donkey-run 4.5s cubic-bezier(0.2, 0.8, 0.4, 1) forwards; }
+.animate-donkey-run { animation: donkey-run 9s linear forwards; }
 
