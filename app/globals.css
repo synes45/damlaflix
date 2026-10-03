@@ -48,3 +48,10 @@ html, body { height: 100%; overflow: hidden; }
   100% { opacity: 1; transform: translateY(0); }
 }
 .animate-pulse-once { animation: pulse-once 0.25s ease-out; }
+
+@keyframes donkey-run {
+  0% { transform: translateX(-180px); }
+  100% { transform: translateX(calc(100vw + 180px)); }
+}
+.animate-donkey-run { animation: donkey-run 4.5s cubic-bezier(0.2, 0.8, 0.4, 1) forwards; }
+

@@ -373,6 +373,12 @@ export default function Home() {
   const [chatToast, setChatToast] = useState<{ id: string; from: string; text: string } | null>(null);
   const chatToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Easter Egg State'leri
+  const [popcornOverload, setPopcornOverload] = useState(false);
+  const [donkeyActive, setDonkeyActive] = useState(false);
+  const heartClicksRef = useRef<number[]>([]);
+  const popcornClicksRef = useRef<number[]>([]);
+
   const ytVideoId = getYouTubeId(videoUrl);
   const isYouTube = !!ytVideoId;
   const peerName = profile === "Efe" ? "Damla" : "Efe";
@@ -718,14 +724,54 @@ export default function Home() {
     e.preventDefault();
     const text = chatInput.trim();
     if (!text || !profileRef.current) return;
+
+    const lower = text.toLowerCase();
+    let magicType: string | null = null;
+    let displayText = text;
+
+    if (
+      lower === "/öp" ||
+      lower === "/op" ||
+      lower === "öpücük" ||
+      lower === "opucuk" ||
+      lower === "💋" ||
+      lower === "/öpücük"
+    ) {
+      magicType = "kiss";
+      displayText = "💋 (Kocaman bir öpücük gönderdi!)";
+    } else if (
+      lower === "/sarıl" ||
+      lower === "/saril" ||
+      lower === "sarıl" ||
+      lower === "saril" ||
+      lower === "🫂"
+    ) {
+      magicType = "hug";
+      displayText = "🫂 (Sımsıkı sarıldı!)";
+    } else if (
+      lower === "/uyku" ||
+      lower === "uyku" ||
+      lower === "🌙" ||
+      lower === "iyi geceler" ||
+      lower === "/iyigeceler"
+    ) {
+      magicType = "sleep";
+      displayText = "🌙 (İyi uykular diledi... ✨)";
+    }
+
+    if (magicType) {
+      triggerMagic(magicType, profileRef.current);
+      sendSignal("magic-action", { type: magicType });
+    }
+
     const msg: ChatMessage = {
       id: `${Date.now()}${Math.random()}`,
       from: profileRef.current,
-      text,
+      text: displayText,
       at: Date.now(),
     };
     setMessages((prev) => [...prev, msg].slice(-200));
-    sendSignal("chat", { id: msg.id, text, at: msg.at });
+    sendSignal("chat", { id: msg.id, text: msg.text, at: msg.at });
     setChatInput("");
   };
 
@@ -766,6 +812,9 @@ export default function Home() {
       showAction,
       showChatToast,
       getTime,
+      triggerLoveRain,
+      triggerPopcornOverload,
+      triggerMagic,
     };
   });
 
@@ -994,7 +1043,24 @@ export default function Home() {
 
     channel.bind("popcorn", (d: { from: string }) => {
       if (d.from === me) return;
-      triggerConfetti();
+      latest.current.triggerConfetti();
+    });
+
+    channel.bind("popcorn-overload", (d: { from: string }) => {
+      if (d.from === me) return;
+      latest.current.triggerPopcornOverload();
+      latest.current.showAction(`🔥🍿 ${d.from} mısır kazanını patlattı! Yavaş aşkm!`);
+    });
+
+    channel.bind("love-rain", (d: { from: string }) => {
+      if (d.from === me) return;
+      latest.current.triggerLoveRain();
+      latest.current.showAction(`❤️ ${d.from} sana kocaman bir aşk yağmuru gönderdi!`);
+    });
+
+    channel.bind("magic-action", (d: { type: string; from: string }) => {
+      if (d.from === me) return;
+      latest.current.triggerMagic(d.type, d.from);
     });
 
     channel.bind("wl-add", (d: { item: WatchlistItem; from: string }) => {
@@ -1080,7 +1146,7 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile]);
 
-  /* ---------------- Aksiyonlar ---------------- */
+  /* ---------------- Aksiyonlar & Easter Egg'ler ---------------- */
   const triggerConfetti = () => {
     confetti({
       particleCount: 80,
@@ -1090,9 +1156,108 @@ export default function Home() {
     });
   };
 
+  const triggerLoveRain = () => {
+    try {
+      const heart = confetti.shapeFromText({ text: "❤️", scalar: 2 });
+      const sparkles = confetti.shapeFromText({ text: "💖", scalar: 2 });
+      confetti({
+        shapes: [heart, sparkles],
+        particleCount: 45,
+        spread: 100,
+        origin: { y: 0.5 },
+      });
+      setTimeout(() => {
+        confetti({
+          shapes: [heart],
+          particleCount: 30,
+          spread: 80,
+          origin: { x: 0.2, y: 0.6 },
+        });
+        confetti({
+          shapes: [sparkles],
+          particleCount: 30,
+          spread: 80,
+          origin: { x: 0.8, y: 0.6 },
+        });
+      }, 300);
+    } catch {
+      confetti({
+        particleCount: 90,
+        spread: 100,
+        colors: ["#ff4d6d", "#ff758f", "#c9184a", "#ffffff"],
+      });
+    }
+  };
+
+  const handleHeartClick = () => {
+    const now = Date.now();
+    heartClicksRef.current = [...heartClicksRef.current.filter((t) => now - t < 2500), now];
+    if (heartClicksRef.current.length >= 5) {
+      heartClicksRef.current = [];
+      triggerLoveRain();
+      sendSignal("love-rain", {});
+      showAction("💖 Aşk Yağmuru Başlatıldı! Seni Çok Seviyorum!");
+    } else {
+      try {
+        const heart = confetti.shapeFromText({ text: "❤️", scalar: 1.5 });
+        confetti({ shapes: [heart], particleCount: 5, spread: 40, origin: { x: 0.15, y: 0.1 } });
+      } catch {}
+    }
+  };
+
+  const triggerPopcornOverload = () => {
+    setPopcornOverload(true);
+    setTimeout(() => setPopcornOverload(false), 3500);
+    try {
+      const popcorn = confetti.shapeFromText({ text: "🍿", scalar: 2.5 });
+      const fire = confetti.shapeFromText({ text: "🔥", scalar: 2 });
+      confetti({ shapes: [popcorn, fire], particleCount: 65, spread: 130, origin: { y: 0.8 } });
+      setTimeout(() => {
+        confetti({ shapes: [popcorn], particleCount: 40, spread: 120, origin: { x: 0.3, y: 0.7 } });
+        confetti({ shapes: [popcorn], particleCount: 40, spread: 120, origin: { x: 0.7, y: 0.7 } });
+      }, 250);
+    } catch {
+      confetti({ particleCount: 140, spread: 130, origin: { y: 0.85 }, colors: ["#e67e22", "#e74c3c", "#f1c40f"] });
+    }
+  };
+
   const handlePopcornClick = () => {
+    const now = Date.now();
+    popcornClicksRef.current = [...popcornClicksRef.current.filter((t) => now - t < 3000), now];
+    if (popcornClicksRef.current.length >= 7) {
+      popcornClicksRef.current = [];
+      triggerPopcornOverload();
+      sendSignal("popcorn-overload", {});
+      showAction("🔥🍿 Yavaş aşkm! Mısır kazanı patladı!");
+      return;
+    }
     triggerConfetti();
     sendSignal("popcorn", {});
+  };
+
+  const triggerMagic = (type: string, from: string) => {
+    if (type === "kiss") {
+      try {
+        const kiss = confetti.shapeFromText({ text: "💋", scalar: 2.2 });
+        const heart = confetti.shapeFromText({ text: "❤️", scalar: 2 });
+        confetti({ shapes: [kiss, heart], particleCount: 50, spread: 90, origin: { y: 0.5 } });
+      } catch {}
+      showAction(`💋 ${from} sana kocaman bir öpücük gönderdi!`);
+    } else if (type === "hug") {
+      try {
+        const hug = confetti.shapeFromText({ text: "🫂", scalar: 2.2 });
+        const sparkles = confetti.shapeFromText({ text: "✨", scalar: 2 });
+        confetti({ shapes: [hug, sparkles], particleCount: 50, spread: 90, origin: { y: 0.5 } });
+      } catch {}
+      showAction(`🫂 ${from} sana sımsıkı sarıldı!`);
+    } else if (type === "sleep") {
+      try {
+        const moon = confetti.shapeFromText({ text: "🌙", scalar: 2 });
+        const star = confetti.shapeFromText({ text: "⭐", scalar: 1.8 });
+        confetti({ shapes: [moon, star], particleCount: 50, spread: 100, origin: { y: 0.5 } });
+      } catch {}
+      showAction(`🌙 ${from}: "İyi uykular aşkm... Tatlı rüyalar! ✨"`);
+    }
   };
 
   const handleChangeVideo = (url: string) => {
@@ -1176,10 +1341,17 @@ export default function Home() {
       {/* Üst Bar */}
       <header className="relative z-10 w-full max-w-6xl flex items-center justify-between py-3 border-b border-zinc-900">
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold tracking-tight text-white">
+          <h1 className="text-xl font-bold tracking-tight text-white select-none">
             DAMLAFLIX
           </h1>
-          <span className="text-rose-500 text-sm">❤️</span>
+          <button
+            type="button"
+            onClick={handleHeartClick}
+            className="text-rose-500 text-sm hover:scale-125 transition-transform active:scale-90 cursor-pointer p-0.5"
+            title="❤️"
+          >
+            ❤️
+          </button>
         </div>
 
         <div className="flex items-center gap-3">
@@ -1381,10 +1553,14 @@ export default function Home() {
         <div className="flex items-center justify-center gap-3 shrink-0">
           <button
             onClick={handlePopcornClick}
-            className="flex items-center gap-2 px-4 py-2 bg-zinc-900/80 hover:bg-zinc-800/90 border border-zinc-800 hover:border-rose-950/80 text-zinc-200 font-medium rounded-full text-xs tracking-wide transition-all duration-200 active:scale-95 cursor-pointer backdrop-blur-md"
+            className={`flex items-center gap-2 px-4 py-2 border font-medium rounded-full text-xs tracking-wide transition-all duration-200 active:scale-95 cursor-pointer backdrop-blur-md ${
+              popcornOverload
+                ? "bg-amber-950 border-amber-500 text-amber-200 animate-pin-shake scale-105 shadow-lg shadow-amber-900/40"
+                : "bg-zinc-900/80 hover:bg-zinc-800/90 border-zinc-800 hover:border-rose-950/80 text-zinc-200"
+            }`}
           >
-            <span className="text-base">🍿</span>
-            <span>Mısır Patlat</span>
+            <span className="text-base">{popcornOverload ? "🔥" : "🍿"}</span>
+            <span>{popcornOverload ? "FIRIN YANDI!" : "Mısır Patlat"}</span>
           </button>
 
           <button
@@ -1795,8 +1971,26 @@ export default function Home() {
         </div>
       )}
 
+      {/* Easter Egg: Koşan Eşşek */}
+      {donkeyActive && (
+        <div className="fixed bottom-12 left-0 z-[70] pointer-events-none animate-donkey-run flex items-center gap-3">
+          <span className="text-5xl select-none filter drop-shadow-lg">🫏</span>
+          <span className="bg-zinc-900/95 border border-rose-900/80 text-rose-200 text-xs px-3.5 py-1.5 rounded-full shadow-2xl font-semibold backdrop-blur-md">
+            İnatçı ama dünyanın en tatlısı! 🥰
+          </span>
+        </div>
+      )}
+
       {/* Alt Bilgi */}
-      <footer className="relative z-10 w-full max-w-6xl text-center py-3 text-xs text-zinc-600 border-t border-zinc-900">
+      <footer
+        onClick={() => {
+          setDonkeyActive(true);
+          showAction("🫏 İnatçı Damla Modu Devrede! İyiki varsın eşşek ❤️");
+          setTimeout(() => setDonkeyActive(false), 4500);
+        }}
+        title="Tıkla :)"
+        className="relative z-10 w-full max-w-6xl text-center py-3 text-xs text-zinc-600 hover:text-zinc-400 transition-colors border-t border-zinc-900 cursor-pointer select-none"
+      >
         damla eşşşeğiyle kaçak film izleyebilmek için | efe ❤️ damla
       </footer>
     </main>
